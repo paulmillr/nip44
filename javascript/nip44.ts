@@ -1,116 +1,138 @@
 import { chacha20 } from '@noble/ciphers/chacha';
 import { ensureBytes, equalBytes } from '@noble/ciphers/utils';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { hkdf } from '@noble/hashes/hkdf';
+import { extract as hkdf_extract, expand as hkdf_expand } from '@noble/hashes/hkdf';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
-import { concatBytes, randomBytes } from '@noble/hashes/utils';
+import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { base64 } from '@scure/base';
-import { utf8ToBytes } from '@noble/hashes/utils';
 
 // https://github.com/nbd-wtf/nostr-tools
 
 const decoder = new TextDecoder();
-function bytesToUtf8(bytes: Uint8Array) {
-  return decoder.decode(bytes);
-}
 
 export const utils = {
   v2: {
-    maxPlaintextSize: 65536 - 128, // 64kb - 128
-    minCiphertextSize: 100, // should be 128 if min padded to 32b: base64(1+32+32+32)
-    maxCiphertextSize: 102400, // 100kb
+    minPlaintextSize: 1, // 1b msg => padded to 32b
+    maxPlaintextSize: 0xffff, // 65535 (64kb-1) => padded to 64kb
 
-    getConversationKey(privkeyA: string, pubkeyB: string): Uint8Array {
-      const key = secp256k1.getSharedSecret(privkeyA, '02' + pubkeyB);
-      return key.subarray(1, 33);
+    utf8Encode: utf8ToBytes,
+    utf8Decode(bytes: Uint8Array) {
+      return decoder.decode(bytes);
     },
 
-    getMessageKeys(conversationKey: Uint8Array, salt: Uint8Array) {
-      const keys = hkdf(sha256, conversationKey, salt, 'nip44-v2', 76);
+    getConversationKey(privkeyA: string, pubkeyB: string): Uint8Array {
+      const sharedX = secp256k1.getSharedSecret(privkeyA, '02' + pubkeyB).subarray(1, 33);
+      const conversationKey = hkdf_extract(sha256, sharedX, 'nip44-v2');
+      return conversationKey;
+    },
+
+    getMessageKeys(conversationKey: Uint8Array, nonce: Uint8Array) {
+      ensureBytes(conversationKey, 32);
+      ensureBytes(nonce, 32);
+      const keys = hkdf_expand(sha256, conversationKey, nonce, 76);
       return {
-        encryption: keys.subarray(0, 32),
-        nonce: keys.subarray(32, 44),
-        auth: keys.subarray(44, 76),
+        chacha_key: keys.subarray(0, 32),
+        chacha_nonce: keys.subarray(32, 44),
+        hmac_key: keys.subarray(44, 76),
       };
     },
 
-    calcPadding(len: number): number {
+    calcPaddedLen(len: number): number {
       if (!Number.isSafeInteger(len) || len < 0) throw new Error('expected positive integer');
       if (len <= 32) return 32;
-      const nextpower = 1 << (Math.floor(Math.log2(len - 1)) + 1);
-      const chunk = nextpower <= 256 ? 32 : nextpower / 8;
+      const nextPower = 1 << (Math.floor(Math.log2(len - 1)) + 1);
+      const chunk = nextPower <= 256 ? 32 : nextPower / 8;
       return chunk * (Math.floor((len - 1) / chunk) + 1);
     },
 
-    pad(unpadded: string): Uint8Array {
-      const unpaddedB = utf8ToBytes(unpadded);
-      const len = unpaddedB.length;
-      if (len < 1 || len >= utils.v2.maxPlaintextSize)
+    writeU16BE(num: number) {
+      if (num < 1 || num > 0xffff)
         throw new Error('invalid plaintext length: must be between 1b and 64KB');
-      const paddedLen = utils.v2.calcPadding(len);
-      const zeros = new Uint8Array(paddedLen - len);
-      const lenBuf = new Uint8Array(2);
-      new DataView(lenBuf.buffer).setUint16(0, len);
-      return concatBytes(lenBuf, unpaddedB, zeros);
+      const arr = new Uint8Array(2);
+      new DataView(arr.buffer).setUint16(0, num, false);
+      return arr;
+    },
+
+    pad(plaintext: string): Uint8Array {
+      const u = utils.v2;
+      const unpadded = u.utf8Encode(plaintext);
+      const unpaddedLen = unpadded.length;
+      const prefix = u.writeU16BE(unpaddedLen);
+      // zeros(len) == new Uint8Array(len)
+      const suffix = new Uint8Array(u.calcPaddedLen(unpaddedLen) - unpaddedLen);
+      const paddedBytes = concatBytes(prefix, unpadded, suffix);
+      return paddedBytes;
     },
 
     unpad(padded: Uint8Array): string {
+      const u = utils.v2;
       const unpaddedLen = new DataView(padded.buffer).getUint16(0);
       const unpadded = padded.subarray(2, 2 + unpaddedLen);
       if (
-        unpaddedLen === 0 ||
+        unpaddedLen < u.minPlaintextSize ||
+        unpaddedLen > u.maxPlaintextSize ||
         unpadded.length !== unpaddedLen ||
-        padded.length !== 2 + utils.v2.calcPadding(unpaddedLen)
+        padded.length !== 2 + u.calcPaddedLen(unpaddedLen)
       )
         throw new Error('invalid padding');
-      return bytesToUtf8(unpadded);
+      const plaintext = u.utf8Decode(unpadded);
+      return plaintext;
     },
+
+    hmacAad(key: Uint8Array, message: Uint8Array, aad: Uint8Array) {
+      if (aad.length !== 32) throw new Error('AAD associated data must be 32 bytes');
+      const data = concatBytes(Uint8Array.from([aad.length]), aad, message);
+      return hmac(sha256, key, data)
+    },
+
+    decodePayload(payload: string) {
+      const plen = payload.length;
+      if (payload[0] === '#') throw new Error('unknown encryption version');
+      if (plen < 132 || plen > 87471) throw new Error('invalid payload length: ' + plen);
+      let data: Uint8Array;
+      try {
+        data = base64.decode(payload);
+      } catch (error) {
+        throw new Error('invalid base64: ' + (error as any).message);
+      }
+      const dlen = data.length;
+      if (dlen < 99 || dlen > 65603) throw new Error('invalid data length: ' + dlen);
+      const vers = data[0];
+      if (vers !== 2) throw new Error('unknown encryption version ' + vers);
+      return {
+        nonce: data.subarray(1, 33),
+        ciphertext: data.subarray(33, -32),
+        mac: data.subarray(-32)
+      };
+    }
   },
 };
 
 export function encrypt(
-  key: Uint8Array,
+  conversationKey: Uint8Array,
   plaintext: string,
-  options: { salt?: Uint8Array; version?: number } = {}
+  options: { nonce?: Uint8Array; version?: number } = {}
 ): string {
+  const u = utils.v2;
   const version = options.version ?? 2;
   if (version !== 2) throw new Error('unknown encryption version ' + version);
-  const salt = options.salt ?? randomBytes(32);
-  ensureBytes(salt, 32);
-  const keys = utils.v2.getMessageKeys(key, salt);
-  const padded = utils.v2.pad(plaintext);
-  const ciphertext = chacha20(keys.encryption, keys.nonce, padded);
-  const mac = hmac(sha256, keys.auth, ciphertext);
-  return base64.encode(concatBytes(new Uint8Array([version]), salt, ciphertext, mac));
+  const nonce = options.nonce ?? randomBytes(32);
+  const { chacha_key, chacha_nonce, hmac_key } = u.getMessageKeys(conversationKey, nonce);
+  const padded = u.pad(plaintext);
+  const ciphertext = chacha20(chacha_key, chacha_nonce, padded);
+  const mac = u.hmacAad(hmac_key, ciphertext, nonce);
+  const payload = base64.encode(concatBytes(new Uint8Array([version]), nonce, ciphertext, mac));
+  return payload;
 }
 
-export function decrypt(key: Uint8Array, ciphertext: string): string {
+export function decrypt(conversationKey: Uint8Array, payload: string): string {
   const u = utils.v2;
-  ensureBytes(key, 32);
-
-  const clen = ciphertext.length;
-  if (clen < u.minCiphertextSize || clen >= u.maxCiphertextSize)
-    throw new Error('invalid ciphertext length: ' + clen);
-
-  if (ciphertext[0] === '#') throw new Error('unknown encryption version');
-  let data: Uint8Array;
-  try {
-    data = base64.decode(ciphertext);
-  } catch (error) {
-    throw new Error('invalid base64: ' + (error as any).message);
-  }
-  const vers = data.subarray(0, 1)[0];
-  if (vers !== 2) throw new Error('unknown encryption version ' + vers);
-
-  const salt = data.subarray(1, 33);
-  const ciphertext_ = data.subarray(33, -32);
-  const mac = data.subarray(-32);
-
-  const keys = u.getMessageKeys(key, salt);
-  const calculatedMac = hmac(sha256, keys.auth, ciphertext_);
+  const { nonce, ciphertext, mac } = u.decodePayload(payload);
+  const { chacha_key, chacha_nonce, hmac_key } = u.getMessageKeys(conversationKey, nonce);
+  const calculatedMac = u.hmacAad(hmac_key, ciphertext, nonce);
   if (!equalBytes(calculatedMac, mac)) throw new Error('invalid MAC');
-
-  const padded = chacha20(keys.encryption, keys.nonce, ciphertext_);
-  return u.unpad(padded);
+  const padded = chacha20(chacha_key, chacha_nonce, ciphertext);
+  const plaintext = u.unpad(padded);
+  return plaintext;
 }
