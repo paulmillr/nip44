@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "outDir": ".",
+    "target": "es2020",
+    "module": "es6",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "declaration": false,
+    "sourceMap": false,
+    "allowSyntheticDefaultImports": false,
+    "allowUnreachableCode": false,
+    "esModuleInterop": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+  },
+  "include": [
+    "nip44.ts",
+  ],
+  "exclude": [
+    "node_modules",
+    "lib"
+  ]
+}
