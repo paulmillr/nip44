@@ -6,11 +6,14 @@
   "type": "module",
   "module": "nip44.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "lint": "prettier --check 'index.ts' '*.test.ts'",
+    "format": "prettier --write 'index.ts' '*.test.ts'",
+    "test": "node index.test.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@noble/ciphers": "0.4.1",
     "@noble/curves": "1.3.0",

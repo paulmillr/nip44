@@ -18,7 +18,8 @@
     "noUnusedParameters": true,
   },
   "include": [
-    "nip44.ts",
+    "index.ts",
+    "index.test.ts"
   ],
   "exclude": [
     "node_modules",
