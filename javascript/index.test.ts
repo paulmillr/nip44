@@ -32,7 +32,7 @@ should('NIP44: invalid', async () => {
         const key = v2.utils.getConversationKey(v.sec1, v.pub2);
         v2.decrypt(v.ciphertext, key);
       },
-      { message: new RegExp(v.note) },
+      { message: new RegExp(v.note) }
     );
   }
 });
@@ -44,7 +44,7 @@ should('NIP44: invalid_conversation_key', async () => {
         const key = v2.utils.getConversationKey(v.sec1, v.pub2);
         v2.encrypt('a', key);
       },
-      { message: /(Point is not on curve|Cannot find square root)/ },
+      { message: /(Point is not on curve|Cannot find square root)/ }
     );
   }
 });

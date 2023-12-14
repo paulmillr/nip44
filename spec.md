@@ -6,41 +6,46 @@ Encrypted Payloads (Versioned)
 
 `optional` `author:paulmillr` `author:staab`
 
-The NIP introduces a new data format for keypair-based encryption. This NIP is versioned to allow multiple algorithm choices to exist simultaneously.
+The NIP introduces a new data format for keypair-based encryption. This NIP is versioned
+to allow multiple algorithm choices to exist simultaneously.
 
-nostr is a key directory. Every nostr user has their own public key,
-which solves key distribution problem, present in other solutions.
-The main goal is to have at least *some* way to send messages between nostr accounts that cannot be read by everyone.
+Nostr is a key directory. Every nostr user has their own public key, which solves key
+distribution problems present in other solutions. The goal of this NIP is to have a
+simple way to send messages between nostr accounts that cannot be read by everyone.
 
-The scheme is not perfect, there are several points to consider:
+The scheme has a number of important shortcomings:
 
 - No deniability: it is possible to prove the event was signed by a particular key
 - No forward secrecy: when a user key is compromised, it is possible to decrypt all previous conversations
 - No post-compromise security: when a user key is compromised, it is possible to decrypt all future conversations
 - No post-quantum security: a powerful quantum computer would be able to decrypt the messages
-- IP and/or location leak: user IP would be seen by relay and all intermediaries between user and relay
-- Date leak: the message date is public, since it is a part of NIP01 event
-- Limited message size leak: padding is obscuring true message length, but not completely
+- IP and/or location leak: user IP may be seen by relays and all intermediaries between user and relay
+- Date leak: the message date is public, since it is a part of NIP 01 event
+- Limited message size leak: padding only partially obscures true message length
 - No attachments: they are not supported
 
-For risky situations, users should chat in specialized E2EE messaging software and limit nostr to exchanging contacts.
+For risky situations, users should chat in specialized E2EE messaging software and limit use
+of nostr to exchanging contacts.
+
+This NIP relies on event signatures for authentication in addition to the HMAC and should only
+be used to encrypt values authenticated by an event's signature, as defined in NIP 01.
 
 ## Versions
 
 Currently defined encryption algorithms:
 
 - `0x00` - Reserved
-- `0x01` - Deprecated
+- `0x01` - Deprecated and undefined
 - `0x02` - secp256k1 ECDH, HKDF, padding, ChaCha20, HMAC-SHA256, base64
 
 ## Version 2
 
 The algorithm choices are justified in a following way:
 
-* Encrypt-then-mac-then-sign instead of encrypt-then-sign-then-mac: we must use NIP01 wrapper, at least for now
+* Encrypt-then-mac-then-sign instead of encrypt-then-sign-then-mac: we MUST use NIP-01 wrapper
 * ChaCha instead of AES: it's faster and has better security against multi-key attacks (see irtf-cfrg-aead-limits-07)
 * ChaCha instead of XChaCha: we don't need xchacha's improved collision resistance of nonces.
-  We reuse keys, every msg has new (key, nonce) pair.
+  We reuse keys, every message has a new (key, nonce) pair.
 * HMAC-SHA256 instead of Poly1305: polynomial MACs can be forged
 * SHA256 instead of SHA3 or BLAKE, because it is already used in nostr
 * Custom padding scheme instead of padmé: padme has worse leak properties for small messages
@@ -185,9 +190,11 @@ def decrypt(payload, conversation_key):
 4. Encrypt padded bytes into ciphertext, using ChaCha20
 5. Calculate MAC (message authentication code) over ciphertext
 6. Base64-encode (with padding) params: `version || nonce || ciphertext || mac`
+7. Add the payload to an event's `content` or `tags`
+8. Calculate the event's hash and signature as described in NIP 01
 
 #### Decryption
-`
+
 1. Validate the message's pubkey and signature
     * `validate_public_key(event.pubkey)` and `validate_signature(event)`
     * public key must be a valid secp256k1 curve point
@@ -213,8 +220,8 @@ A collection of implementations in different languages is available [on GitHub](
 
 ### Testing
 
-encrypt must calculate and compare shared key, calculate and compare ciphertext.
-decrypt must compare plaintext.
+Encrypt must calculate and compare shared key, calculate and compare ciphertext.
+Decrypt must compare plaintext.
 
 Steps that must be tested:
 
