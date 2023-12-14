@@ -55,9 +55,11 @@ The algorithm choices are justified in a following way:
       comprised of methods `hkdf_extract(IKM, salt)` and `hkdf_expand(OKM, info, L)`
     * `chacha20(key, nonce, data)` is ChaCha20 (RFC 8439)[^2], with starting counter set to 0
     * `hmac_sha256(key, message)` is HMAC (RFC 2104)[^3]
-    * `secp256k1_ecdh(priv_a, pub_b)` is multiplication of point B by scalar a (`a ⋅ B`), defined in BIP340[^4].
-      The operation produces shared point, and we encode the shared point's 32-byte x coordinate,
-      using method `bytes(P)` from BIP340.
+    * `secp256k1_ecdh(priv_a, pub_b)` is multiplication of point B by
+      scalar a (`a ⋅ B`), defined in BIP340[^4]. The operation produces shared point,
+      and we encode the shared point's 32-byte x coordinate,
+      using method `bytes(P)` from BIP340. Private and public keys must be validated
+      as per BIP340.
 * Operators
     * `||` refers to byte array concatenation
     * `x[i:j]`, where `x` is a byte array and `i, j <= 0`,
@@ -105,10 +107,10 @@ def unpad(padded):
   return plaintext
 
 def decode_payload(payload):
-  if (payload.length < 1 or payload.length > payload[0] == '#'): raise Error('unknown version')
+  if (payload.length < 1 or payload[0] == '#'): raise Error('unknown version')
   data = base64_decode(payload)
   dlen = d.length
-  if (dlen < 67+32 or dlen > 67+65536): raise Error('invalid msg size')
+  if dlen < 99: raise Error('invalid msg size')
   vers = data[0]
   if vers != 2: raise Error('unknown version ' + vers)
   nonce = data[1:33]
