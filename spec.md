@@ -51,11 +51,11 @@ The algorithm choices are justified in a following way:
 
 * Cryptographic methods
     * `secure_random_bytes(length)` fetches randomness from CSPRNG
-    * `hkdf(IKM, salt, info, L)` represents HKDF (RFC 5869) with SHA256 hash function,
+    * `hkdf(IKM, salt, info, L)` represents HKDF (RFC 5869)[^1] with SHA256 hash function,
       comprised of methods `hkdf_extract(IKM, salt)` and `hkdf_expand(OKM, info, L)`
-    * `chacha20(key, nonce, data)` is ChaCha20 (RFC 8439), with starting counter set to 0
-    * `hmac_sha256(key, message)` is HMAC (RFC 2104)
-    * `secp256k1_ecdh(priv_a, pub_b)` is multiplication of point B by scalar a (`a ⋅ B`), defined in BIP340.
+    * `chacha20(key, nonce, data)` is ChaCha20 (RFC 8439)[^2], with starting counter set to 0
+    * `hmac_sha256(key, message)` is HMAC (RFC 2104)[^3]
+    * `secp256k1_ecdh(priv_a, pub_b)` is multiplication of point B by scalar a (`a ⋅ B`), defined in BIP340[^4].
       The operation produces shared point, and we encode the shared point's 32-byte x coordinate,
       using method `bytes(P)` from BIP340.
 * Operators
@@ -66,10 +66,11 @@ The algorithm choices are justified in a following way:
     * `min_plaintext_size` is 1. 1b msg is padded to 32b.
     * `max_plaintext_size` is 65536. 64kb msg is padded to 64kb.
 * Functions
-    * `base64_encode(string)` and `base64_decode(bytes)` are Base64 (RFC 4648, with padding)
+    * `base64_encode(string)` and `base64_decode(bytes)` are Base64 (RFC 4648[^5], with padding)
     * `is_equal_ct(a, b)` is constant-time equality check of 2 byte arrays
     * `utf8_encode(string)` and `utf8_decode(bytes)` transform string to byte array and back
-    * `write_u16_be(number)` encodes number into Big-Endian uint16 byte array
+    * `write_u8(number)` restricts number to values 0..255 and encodes into Big-Endian uint8 byte array
+    * `write_u16_be(number)` restricts number to values 0..65535 and encodes into Big-Endian uint16 byte array
     * `zeros(length)` creates byte array of length `length >= 0`, filled with zeros
     * TODO `floor`, `log2` are mathematical methods, representing rounding and log
 
@@ -109,11 +110,16 @@ def decode_payload(payload):
   dlen = d.length
   if (dlen < 67+32 or dlen > 67+65536): raise Error('invalid msg size')
   vers = data[0]
-  if (vers != 2): raise Error('unknown version ' + vers)
+  if vers != 2: raise Error('unknown version ' + vers)
   nonce = data[1:33]
   ciphertext = data[33:dlen - 32]
   mac = data[dlen - 32:dlen]
   return (nonce, ciphertext, mac)
+
+def hmac_aad(key, message, aad):
+  if aad.length !== 32: raise Error('AAD associated data must be 32 bytes');
+  combined = (write_u8(aad.length) || aad || message);
+  return hmac(sha256, key, combined);
 
 # Calculates long-term key between users A and B: `get_key(Apriv, Bpub) == get_key(Bpriv, Apub)`
 def get_conversation_key(private_key_a, public_key_b):
@@ -136,15 +142,15 @@ def encrypt(plaintext, conversation_key, nonce):
   (chacha_key, chacha_nonce, hmac_key) = get_message_keys(conversation_key, nonce)
   padded = pad(plaintext)
   ciphertext = chacha20(key: chacha_key, nonce: chacha_nonce, data: padded)
-  mac = hmac_sha256(key: hmac_key, message: ciphertext)
+  mac = hmac_aad(key: hmac_key, message: ciphertext, aad: nonce)
   payload = base64_encode(write_u8(version) || nonce || ciphertext || mac)
   return payload
 
 def decrypt(payload, conversation_key):
   (nonce, ciphertext, mac) = decode_payload(payload)
   (chacha_key, chacha_nonce, hmac_key) = get_message_keys(conversation_key, nonce)
-  calculated_mac = hmac_sha256(key: hmac_key, message: ciphertext)
-  if (is_equal_ct(calculated_mac, mac)): raise Error('invalid MAC')
+  calculated_mac = hmac_aad(key: hmac_key, message: ciphertext, aad: nonce)
+  if !is_equal_ct(calculated_mac, mac): raise Error('invalid MAC')
   padded = chacha20(key: chacha_key, nonce: chacha_nonce, data: ciphertext)
   plaintext = unpad(unpadded)
   return plaintext
@@ -477,3 +483,10 @@ ArY1I2xC2yDwIbuNHN/1ynXdGgzHLqdCrXUPMwELJPc7ysu7m8bzLLv3LyxbtMit2SsnmvFjnrJN9Qqo
   }
 }
 ```
+
+
+[^1]: https://datatracker.ietf.org/doc/html/rfc5869
+[^2]: https://datatracker.ietf.org/doc/html/rfc8439
+[^3]: https://datatracker.ietf.org/doc/html/rfc2104
+[^4]: https://github.com/bitcoin/bips/blob/e918b50731397872ad2922a1b08a5a4cd1d6d546/bip-0340.mediawiki
+[^5]: https://datatracker.ietf.org/doc/html/rfc4648

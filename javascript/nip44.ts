@@ -7,8 +7,6 @@ import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { base64 } from '@scure/base';
 
-// https://github.com/nbd-wtf/nostr-tools
-
 const decoder = new TextDecoder();
 
 export const utils = {
@@ -47,8 +45,8 @@ export const utils = {
     },
 
     writeU16BE(num: number) {
-      if (num < 1 || num > 0xffff)
-        throw new Error('invalid plaintext length: must be between 1b and 64KB');
+      if (!Number.isSafeInteger(num) || num < 1 || num > 0xffff)
+        throw new Error('invalid plaintext length: must be between 1 and 65535 bytes');
       const arr = new Uint8Array(2);
       new DataView(arr.buffer).setUint16(0, num, false);
       return arr;
@@ -82,8 +80,8 @@ export const utils = {
 
     hmacAad(key: Uint8Array, message: Uint8Array, aad: Uint8Array) {
       if (aad.length !== 32) throw new Error('AAD associated data must be 32 bytes');
-      const data = concatBytes(Uint8Array.from([aad.length]), aad, message);
-      return hmac(sha256, key, data)
+      const combined = concatBytes(Uint8Array.from([aad.length]), aad, message);
+      return hmac(sha256, key, combined);
     },
 
     decodePayload(payload: string) {
@@ -103,16 +101,16 @@ export const utils = {
       return {
         nonce: data.subarray(1, 33),
         ciphertext: data.subarray(33, -32),
-        mac: data.subarray(-32)
+        mac: data.subarray(-32),
       };
-    }
+    },
   },
 };
 
 export function encrypt(
   conversationKey: Uint8Array,
   plaintext: string,
-  options: { nonce?: Uint8Array; version?: number } = {}
+  options: { nonce?: Uint8Array; version?: number } = {},
 ): string {
   const u = utils.v2;
   const version = options.version ?? 2;

@@ -1,56 +1,57 @@
-import { encrypt, decrypt, utils } from './nip44.ts';
+import { should } from 'micro-should';
+import { encrypt, decrypt, utils } from './nip44.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { v2 as vectors } from './nip44.vectors.json';
-import { getPublicKey } from './keys.ts';
+import allVectors from './nip44.vectors.json' assert { type: "json" };
+import { schnorr } from '@noble/curves/secp256k1';
+import { strictEqual, throws } from 'node:assert';
+const { getPublicKey } = schnorr;
+const { v2: vectors } = allVectors;
 
-test('NIP44: valid_sec', async () => {
-  for (const v of vectors.valid_sec) {
-    const pub2 = getPublicKey(v.sec2);
-    const key = utils.v2.getConversationKey(v.sec1, pub2);
-    expect(bytesToHex(key)).toEqual(v.shared);
-    const ciphertext = encrypt(key, v.plaintext, { salt: hexToBytes(v.salt) });
-    expect(ciphertext).toEqual(v.ciphertext);
-    const decrypted = decrypt(key, ciphertext);
-    expect(decrypted).toEqual(v.plaintext);
-  }
+should('NIP44: valid_sec', async () => {
+    for (const v of vectors.valid_sec) {
+        const pub2 = bytesToHex(getPublicKey(v.sec2));
+        const key = utils.v2.getConversationKey(v.sec1, pub2);
+        strictEqual(bytesToHex(key), v.conversation_key);
+        const ciphertext = encrypt(key, v.plaintext, { nonce: hexToBytes(v.nonce) });
+        strictEqual(ciphertext, v.ciphertext);
+        const decrypted = decrypt(key, ciphertext);
+        strictEqual(decrypted, v.plaintext);
+    }
 });
-
-test('NIP44: valid_pub', async () => {
-  for (const v of vectors.valid_pub) {
-    const key = utils.v2.getConversationKey(v.sec1, v.pub2);
-    expect(bytesToHex(key)).toEqual(v.shared);
-    const ciphertext = encrypt(key, v.plaintext, { salt: hexToBytes(v.salt) });
-    expect(ciphertext).toEqual(v.ciphertext);
-    const decrypted = decrypt(key, ciphertext);
-    expect(decrypted).toEqual(v.plaintext);
-  }
+should('NIP44: valid_pub', async () => {
+    for (const v of vectors.valid_pub) {
+        const key = utils.v2.getConversationKey(v.sec1, v.pub2);
+        strictEqual(bytesToHex(key), v.conversation_key);
+        const ciphertext = encrypt(key, v.plaintext, { nonce: hexToBytes(v.nonce) });
+        strictEqual(ciphertext, v.ciphertext);
+        const decrypted = decrypt(key, ciphertext);
+        strictEqual(decrypted, v.plaintext);
+    }
 });
-
-test('NIP44: invalid', async () => {
-  for (const v of vectors.invalid) {
-    expect(() => {
-      const key = utils.v2.getConversationKey(v.sec1, v.pub2);
-      const ciphertext = decrypt(key, v.ciphertext);
-    }).toThrowError(v.note);
-  }
+should('NIP44: invalid', async () => {
+    for (const v of vectors.invalid) {
+        throws(() => {
+            const key = utils.v2.getConversationKey(v.sec1, v.pub2);
+            const ciphertext = decrypt(key, v.ciphertext);
+        }, { message: new RegExp(v.note) });
+    }
 });
-
-test('NIP44: invalid_conversation_key', async () => {
-  for (const v of vectors.invalid_conversation_key) {
-    expect(() => {
-      const key = utils.v2.getConversationKey(v.sec1, v.pub2);
-      const ciphertext = encrypt(key, 'a');
-    }).toThrowError();
-  }
+should('NIP44: invalid_conversation_key', async () => {
+    for (const v of vectors.invalid_conversation_key) {
+        throws(() => {
+            utils.v2.getConversationKey(v.sec1, v.pub2);
+            const key = utils.v2.getConversationKey(v.sec1, v.pub2);
+            const ciphertext = encrypt(key, 'a');
+        }, { message: /(Point is not on curve|Cannot find square root)/ });
+    }
 });
-
-test('NIP44: v1 calcPadding', () => {
-  for (const [len, shouldBePaddedTo] of vectors.padding) {
-    const actual = utils.v2.calcPadding(len);
-    expect(actual).toEqual(shouldBePaddedTo);
-  }
+should('NIP44: v1 calcPadding', () => {
+    for (const [len, shouldBePaddedTo] of vectors.padding) {
+        const actual = utils.v2.calcPadding(len);
+        strictEqual(actual, shouldBePaddedTo);
+    }
 });
-
+should.run();
 // To re-generate vectors and produce new ones:
 // Create regen.mjs with this content:
 // import {getPublicKey, nip44} from './lib/esm/nostr.mjs'
@@ -59,12 +60,12 @@ test('NIP44: v1 calcPadding', () => {
 // function genVectors(v) {
 //   const pub2 = v.pub2 ?? getPublicKey(v.sec2);
 //   let sharedKey = nip44.utils.v2.getConversationKey(v.sec1, pub2)
-//   let ciphertext = nip44.encrypt(sharedKey, v.plaintext, { salt: hexToBytes(v.salt) })
+//   let ciphertext = nip44.encrypt(sharedKey, v.plaintext, { nonce: hexToBytes(v.nonce) })
 //   console.log({
 //     sec1: v.sec1,
 //     pub2: pub2,
-//     sharedKey: bytesToHex(sharedKey),
-//     salt: v.salt,
+//     sharedx: bytesToHex(sharedx),
+//     nonce: v.nonce,
 //     plaintext: v.plaintext,
 //     ciphertext
 //   })
