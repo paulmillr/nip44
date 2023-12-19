@@ -39,10 +39,7 @@ impl MessageKeys {
 }
 
 /// A conversation key is the long-term secret that two nostr identities share.
-pub fn get_conversation_key(
-    private_key_a: SecretKey,
-    x_only_public_key_b: XOnlyPublicKey,
-) -> [u8; 32] {
+fn get_shared_point(private_key_a: SecretKey, x_only_public_key_b: XOnlyPublicKey) -> [u8; 32] {
     let pubkey = PublicKey::from_x_only_public_key(x_only_public_key_b, Parity::Even);
     let mut ssp = shared_secret_point(&pubkey, &private_key_a)
         .as_slice()
@@ -51,13 +48,23 @@ pub fn get_conversation_key(
     ssp.try_into().unwrap()
 }
 
-fn get_message_keys(
-    conversation_key: &[u8; 32],
-    salt: &[u8; 32],
-) -> Result<MessageKeys, Error> {
-    let hk = Hkdf::<Sha256>::new(Some(&salt[..]), conversation_key);
+pub fn get_conversation_key(
+    private_key_a: SecretKey,
+    x_only_public_key_b: XOnlyPublicKey,
+) -> [u8; 32] {
+    let shared_point = get_shared_point(private_key_a, x_only_public_key_b);
+    let (convo_key, _hkdf) =
+        Hkdf::<Sha256>::extract(Some("nip44-v2".as_bytes()), shared_point.as_slice());
+    convo_key.into()
+}
+
+fn get_message_keys(conversation_key: &[u8; 32], nonce: &[u8; 32]) -> Result<MessageKeys, Error> {
+    let hk: Hkdf<Sha256> = match Hkdf::from_prk(conversation_key) {
+        Ok(hk) => hk,
+        Err(_) => return Err(Error::HkdfLength(conversation_key.len())),
+    };
     let mut message_keys: MessageKeys = MessageKeys::zero();
-    if let Err(_) = hk.expand("nip44-v2".as_bytes(), &mut message_keys.0) {
+    if hk.expand(&nonce[..], &mut message_keys.0).is_err() {
         return Err(Error::HkdfLength(message_keys.0.len()));
     }
     Ok(message_keys)
@@ -102,27 +109,28 @@ pub fn encrypt(conversation_key: &[u8; 32], plaintext: &str) -> Result<String, E
 fn encrypt_inner(
     conversation_key: &[u8; 32],
     plaintext: &str,
-    override_random_salt: Option<&[u8; 32]>,
+    override_random_nonce: Option<&[u8; 32]>,
 ) -> Result<String, Error> {
-    let salt = match override_random_salt {
-        Some(salt) => salt.to_owned(),
+    let nonce = match override_random_nonce {
+        Some(nonce) => nonce.to_owned(),
         None => {
-            let mut salt: [u8; 32] = [0; 32];
-            OsRng.fill_bytes(&mut salt);
-            salt
+            let mut nonce: [u8; 32] = [0; 32];
+            OsRng.fill_bytes(&mut nonce);
+            nonce
         }
     };
 
-    let keys = get_message_keys(conversation_key, &salt)?;
+    let keys = get_message_keys(conversation_key, &nonce)?;
     let mut buffer = pad(plaintext)?;
     let mut cipher = ChaCha20::new(&keys.encryption().into(), &keys.nonce().into());
     cipher.apply_keystream(&mut buffer);
     let mut mac = Hmac::<Sha256>::new_from_slice(&keys.auth())?;
+    mac.update(&nonce);
     mac.update(&buffer);
     let mac_bytes = mac.finalize().into_bytes();
 
     let mut pre_base64: Vec<u8> = vec![2];
-    pre_base64.extend_from_slice(&salt);
+    pre_base64.extend_from_slice(&nonce);
     pre_base64.extend_from_slice(&buffer);
     pre_base64.extend_from_slice(&mac_bytes);
 
@@ -130,10 +138,7 @@ fn encrypt_inner(
 }
 
 /// Decrypt the base64 encrypted contents with a conversation key
-pub fn decrypt(
-    conversation_key: &[u8; 32],
-    base64_ciphertext: &str,
-) -> Result<String, Error> {
+pub fn decrypt(conversation_key: &[u8; 32], base64_ciphertext: &str) -> Result<String, Error> {
     if base64_ciphertext.as_bytes()[0] == b'#' {
         return Err(Error::UnsupportedFutureVersion);
     }
@@ -144,19 +149,23 @@ pub fn decrypt(
         return Err(Error::UnknownVersion);
     }
     let dlen = binary_ciphertext.len();
-    let salt = &binary_ciphertext[1..33];
+    let nonce = &binary_ciphertext[1..33];
     let mut buffer = binary_ciphertext[33..dlen - 32].to_owned();
     let mac = &binary_ciphertext[dlen - 32..dlen];
-    let keys = get_message_keys(conversation_key, &salt.try_into().unwrap())?;
+    let keys = get_message_keys(conversation_key, &nonce.try_into().unwrap())?;
     let mut calculated_mac = Hmac::<Sha256>::new_from_slice(&keys.auth())?;
+    calculated_mac.update(&nonce);
     calculated_mac.update(&buffer);
     let calculated_mac_bytes = calculated_mac.finalize().into_bytes();
-    if mac != calculated_mac_bytes.as_slice() {
+    if !constant_time_eq::constant_time_eq(mac, calculated_mac_bytes.as_slice()) {
         return Err(Error::InvalidMac);
     }
     let mut cipher = ChaCha20::new(&keys.encryption().into(), &keys.nonce().into());
     cipher.apply_keystream(&mut buffer);
     let unpadded_len = u16::from_be_bytes(buffer[0..2].try_into().unwrap()) as usize;
+    if buffer.len() < 2 + unpadded_len {
+        return Err(Error::InvalidPadding);
+    }
     let unpadded = &buffer[2..2 + unpadded_len];
     if unpadded.is_empty() {
         return Err(Error::MessageIsEmpty);
