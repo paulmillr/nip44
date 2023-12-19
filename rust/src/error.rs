@@ -1,4 +1,3 @@
-
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq)]
@@ -41,5 +40,5 @@ pub enum Error {
 
     // UTF8 Decode
     #[error("UTF8 Decode: {0}")]
-    Utf8Decode(#[from] std::string::FromUtf8Error)
+    Utf8Decode(#[from] std::string::FromUtf8Error),
 }
