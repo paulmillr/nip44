@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 
@@ -17,7 +18,8 @@ import (
 )
 
 var (
-	MaxPlaintextSize = 65536 - 128 // 64kb - 128
+	MinPlaintextSize = 0x0001 // 1b msg => padded to 32b
+	MaxPlaintextSize = 0xffff // 65535 (64kb-1) => padded to 64kb
 )
 
 type EncryptOptions struct {
@@ -49,7 +51,7 @@ func Encrypt(conversationKey []byte, plaintext string, options *EncryptOptions) 
 		}
 	}
 	if version != 2 {
-		return "", errors.New("unknown version")
+		return "", errors.New(fmt.Sprintf("unknown version %d", version))
 	}
 	if len(salt) != 32 {
 		return "", errors.New("salt must be 32 bytes")
@@ -63,7 +65,9 @@ func Encrypt(conversationKey []byte, plaintext string, options *EncryptOptions) 
 	if ciphertext, err = chacha20_(enc, nonce, []byte(padded)); err != nil {
 		return "", err
 	}
-	hmac_ = sha256Hmac(auth, ciphertext)
+	if hmac_, err = sha256Hmac(auth, ciphertext, salt); err != nil {
+		return "", err
+	}
 	concat = append(concat, []byte{byte(version)}...)
 	concat = append(concat, salt...)
 	concat = append(concat, ciphertext...)
@@ -75,9 +79,11 @@ func Decrypt(conversationKey []byte, ciphertext string) (string, error) {
 	var (
 		version     int = 2
 		decoded     []byte
+		cLen        int
 		dLen        int
 		salt        []byte
 		ciphertext_ []byte
+		hmac        []byte
 		hmac_       []byte
 		enc         []byte
 		nonce       []byte
@@ -87,6 +93,10 @@ func Decrypt(conversationKey []byte, ciphertext string) (string, error) {
 		unpadded    []byte
 		err         error
 	)
+	cLen = len(ciphertext)
+	if cLen < 132 || cLen > 87472 {
+		return "", errors.New(fmt.Sprintf("invalid payload length: %d", cLen))
+	}
 	if ciphertext[0:1] == "#" {
 		return "", errors.New("unknown version")
 	}
@@ -94,29 +104,48 @@ func Decrypt(conversationKey []byte, ciphertext string) (string, error) {
 		return "", errors.New("invalid base64")
 	}
 	if version = int(decoded[0]); version != 2 {
-		return "", errors.New("unknown version")
+		return "", errors.New(fmt.Sprintf("unknown version %d", version))
 	}
 	dLen = len(decoded)
+	if dLen < 99 || dLen > 65603 {
+		return "", errors.New(fmt.Sprintf("invalid data length: %d", dLen))
+	}
 	salt, ciphertext_, hmac_ = decoded[1:33], decoded[33:dLen-32], decoded[dLen-32:]
 	if enc, nonce, auth, err = messageKeys(conversationKey, salt); err != nil {
 		return "", err
 	}
-	if !bytes.Equal(hmac_, sha256Hmac(auth, ciphertext_)) {
+	if hmac, err = sha256Hmac(auth, ciphertext_, salt); err != nil {
+		return "", err
+	}
+	if !bytes.Equal(hmac_, hmac) {
 		return "", errors.New("invalid hmac")
 	}
 	if padded, err = chacha20_(enc, nonce, ciphertext_); err != nil {
 		return "", err
 	}
 	unpaddedLen = binary.BigEndian.Uint16(padded[0:2])
+	if unpaddedLen < uint16(MinPlaintextSize) || unpaddedLen > uint16(MaxPlaintextSize) || len(padded) != 2+calcPadding(int(unpaddedLen)) {
+		return "", errors.New("invalid padding")
+	}
 	unpadded = padded[2 : unpaddedLen+2]
-	if len(unpadded) == 0 || len(unpadded) != int(unpaddedLen) || len(padded) != 2+calcPadding(int(unpaddedLen)) {
+	if len(unpadded) == 0 || len(unpadded) != int(unpaddedLen) {
 		return "", errors.New("invalid padding")
 	}
 	return string(unpadded), nil
 }
 
 func GenerateConversationKey(sendPrivkey *secp256k1.PrivateKey, recvPubkey *secp256k1.PublicKey) []byte {
-	return secp256k1.GenerateSharedSecret(sendPrivkey, recvPubkey)
+	// TODO: Make sure keys are not invalid or weak since the secp256k1 package does not.
+	// See documentation of secp256k1.PrivKeyFromBytes:
+	// ================================================================================
+	// | WARNING: This means passing a slice with more than 32 bytes is truncated and |
+	// | that truncated value is reduced modulo N.  Further, 0 is not a valid private |
+	// | key.  It is up to the caller to provide a value in the appropriate range of  |
+	// | [1, N-1].  Failure to do so will either result in an invalid private key or  |
+	// | potentially weak private keys that have bias that could be exploited.        |
+	// ================================================================================
+	shared := secp256k1.GenerateSharedSecret(sendPrivkey, recvPubkey)
+	return hkdf.Extract(sha256.New, shared, []byte("nip44-v2"))
 }
 
 func chacha20_(key []byte, nonce []byte, message []byte) ([]byte, error) {
@@ -140,10 +169,14 @@ func randomBytes(n int) ([]byte, error) {
 	return buf, nil
 }
 
-func sha256Hmac(key []byte, ciphertext []byte) []byte {
+func sha256Hmac(key []byte, ciphertext []byte, aad []byte) ([]byte, error) {
+	if len(aad) != 32 {
+		return nil, errors.New("aad data must be 32 bytes")
+	}
 	h := hmac.New(sha256.New, key)
+	h.Write(aad)
 	h.Write(ciphertext)
-	return h.Sum(nil)
+	return h.Sum(nil), nil
 }
 
 func messageKeys(conversationKey []byte, salt []byte) ([]byte, []byte, []byte, error) {
@@ -154,7 +187,13 @@ func messageKeys(conversationKey []byte, salt []byte) ([]byte, []byte, []byte, e
 		auth  []byte = make([]byte, 32)
 		err   error
 	)
-	r = hkdf.New(sha256.New, conversationKey, salt, []byte("nip44-v2"))
+	if len(conversationKey) != 32 {
+		return nil, nil, nil, errors.New("conversation key must be 32 bytes")
+	}
+	if len(salt) != 32 {
+		return nil, nil, nil, errors.New("salt must be 32 bytes")
+	}
+	r = hkdf.Expand(sha256.New, conversationKey, salt)
 	if _, err = io.ReadFull(r, enc); err != nil {
 		return nil, nil, nil, err
 	}
@@ -176,7 +215,7 @@ func pad(s string) ([]byte, error) {
 	)
 	sb = []byte(s)
 	sbLen = len(sb)
-	if sbLen < 1 || sbLen >= MaxPlaintextSize {
+	if sbLen < 1 || sbLen > MaxPlaintextSize {
 		return nil, errors.New("plaintext should be between 1b and 64kB")
 	}
 	padding = calcPadding(sbLen)
