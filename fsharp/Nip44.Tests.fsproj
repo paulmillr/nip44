@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+        <GenerateProgramFile>false</GenerateProgramFile>
+        <RootNamespace>Nip44.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Nip44.fs" />
+        <Compile Include="Nip44.Tests.fs" />
+        <Content Include="..\nip44.vectors.json">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+          <Link>nip44.vectors.json</Link>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FsUnit.xUnit" Version="5.2.0" />
+        <PackageReference Include="LibChaCha20" Version="1.0.1" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
+        <PackageReference Include="NBitcoin.Secp256k1" Version="3.1.2" />
+        <PackageReference Include="xunit" Version="2.4.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+</Project>

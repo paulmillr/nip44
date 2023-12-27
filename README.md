@@ -7,7 +7,8 @@ Implementations:
 - Go (MIT): copied from https://git.ekzyis.com/ekzyis/nip44
 - JavaScript / TypeScript (public domain): copied from https://github.com/nostr-protocol/nips
 - Rust (MIT): copied from https://github.com/mikedilger/nip44
-
+- FSharp (MIT): copied/adapted from https://github.com/lontivero/Nostra
+  
 Audits:
 
 - [2023.12](./audit-2023.12.pdf) - Cure53, Dr M. Heiderich, Dr. Mazaheri, Dr. Bleichenbacher
