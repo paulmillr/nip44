@@ -144,6 +144,7 @@ func GenerateConversationKey(sendPrivkey *secp256k1.PrivateKey, recvPubkey *secp
 	// | [1, N-1].  Failure to do so will either result in an invalid private key or  |
 	// | potentially weak private keys that have bias that could be exploited.        |
 	// ================================================================================
+	// -- https://pkg.go.dev/github.com/decred/dcrd/dcrec/secp256k1/v4#PrivKeyFromBytes
 	shared := secp256k1.GenerateSharedSecret(sendPrivkey, recvPubkey)
 	return hkdf.Extract(sha256.New, shared, []byte("nip44-v2"))
 }
