@@ -5,7 +5,7 @@ NIP44 encrypted messages for [nostr](https://nostr.com). Spec copied from [githu
 Implementations:
 
 - F# (GPL v2): taken from https://github.com/lontivero/Nostra
-- Go (MIT): taken from https://git.ekzyis.com/ekzyis/nip44
+- Go (MIT): taken from https://git.ekzyis.com/ekzyis/nip44, **currently unsafe**
 - JavaScript / TypeScript (public domain): taken from https://github.com/nostr-protocol/nips
 - Rust (MIT): taken from https://github.com/mikedilger/nip44
 
