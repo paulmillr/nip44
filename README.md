@@ -1,17 +1,18 @@
 # NIP-44
 
-NIP44 encrypted messages for [nostr](https://nostr.com). Spec copied from [github.com/nostr-protocol/nips](https://github.com/nostr-protocol/nips/blob/master/44.md).
+NIP44 encrypted messages for [nostr](https://nostr.com).
+Spec copied from [github.com/nostr-protocol/nips](https://github.com/nostr-protocol/nips/blob/master/44.md).
+Audited on [2023.12](./audit-2023.12.pdf) by Cure53, Dr M. Heiderich, Dr. Mazaheri, Dr. Bleichenbacher.
 
 Implementations:
 
-- F# (GPL v2): taken from https://github.com/lontivero/Nostra
-- Go (MIT): taken from https://git.ekzyis.com/ekzyis/nip44, **currently unsafe**
-- JavaScript / TypeScript (public domain): taken from https://github.com/nostr-protocol/nips
-- Rust (MIT): taken from https://github.com/mikedilger/nip44
-
-Audits:
-
-- [2023.12](./audit-2023.12.pdf) - Cure53, Dr M. Heiderich, Dr. Mazaheri, Dr. Bleichenbacher
+| Language        | License       | Copied from                               | Note   |   |
+|-----------------|---------------|-------------------------------------------|--------|---|
+| F#              | GPL 2         | https://github.com/lontivero/Nostra       |        |   |
+| Go              | MIT           | https://git.ekzyis.com/ekzyis/nip44       | Unsafe |   |
+| Kotlin          | MIT           | https://github.com/vitorpamplona/amethyst |        |   |
+| Rust            | MIT           | https://github.com/mikedilger/nip44       |        |   |
+| TypeScript / JS | Public domain | https://github.com/nostr-protocol/nips    |        |   |
 
 ---
 NIP-44
