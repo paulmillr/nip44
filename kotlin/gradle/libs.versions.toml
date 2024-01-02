@@ -1,0 +1,27 @@
+[versions]
+agp = "8.2.0"
+espressoCore = "3.5.1"
+jacksonModuleKotlin = "2.16.1"
+jna = "5.14.0"
+junit = "1.1.5"
+kotlin = "1.9.21"
+lazysodiumAndroid = "5.1.0"
+lazysodiumJava = "5.1.4"
+secp256k1KmpJni = "0.12.0"
+
+[libraries]
+androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCore" }
+androidx-junit = { module = "androidx.test.ext:junit", version.ref = "junit" }
+androidx-junit-ktx = { module = "androidx.test.ext:junit-ktx", version.ref = "junit" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jacksonModuleKotlin" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+lazysodium-android = { module = "com.goterl:lazysodium-android", version.ref = "lazysodiumAndroid" }
+lazysodium-java = { module = "com.goterl:lazysodium-java", version.ref = "lazysodiumJava" }
+secp256k1-kmp = { module = "fr.acinq.secp256k1:secp256k1-kmp", version.ref = "secp256k1KmpJni" }
+secp256k1-kmp-jni-android = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-android", version.ref = "secp256k1KmpJni" }
+secp256k1-kmp-jni-jvm = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-jvm", version.ref = "secp256k1KmpJni" }
+
+[plugins]
+androidLibrary = { id = "com.android.library", version.ref = "agp" }
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
