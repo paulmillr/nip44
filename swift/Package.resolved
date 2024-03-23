@@ -1,0 +1,23 @@
+{
+  "originHash" : "1d6f7527d10cfa876d441f35200704f4b268cb92840635512b69dedb115eca19",
+  "pins" : [
+    {
+      "identity" : "secp256k1.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GigaBitcoin/secp256k1.swift",
+      "state" : {
+        "revision" : "347b84ed2aad2305a7233f2a48d76f41e52062a1",
+        "version" : "0.16.0"
+      }
+    },
+    {
+      "identity" : "swift-sodium",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jedisct1/swift-sodium.git",
+      "state" : {
+        "revision" : "63240810df971557fe9badc557257bdfbfeb90a3"
+      }
+    }
+  ],
+  "version" : 3
+}
