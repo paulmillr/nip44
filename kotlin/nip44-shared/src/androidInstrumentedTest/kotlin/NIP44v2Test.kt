@@ -21,7 +21,7 @@ class NIP44v2Test {
 
     private val nip44v2 = getNip44()
 
-    fun sha256Hex(data: ByteArray): String {
+    private fun sha256Hex(data: ByteArray): String {
         // Creates a new buffer every time
         return Hex.encode(MessageDigest.getInstance("SHA-256").digest(data))
     }
@@ -51,19 +51,23 @@ class NIP44v2Test {
         val secp256k1 = Secp256k1.get()
         for (v in vectors.v2?.valid?.encryptDecrypt!!) {
             val pub2 = secp256k1.pubKeyCompress(secp256k1.pubkeyCreate(Hex.decode(v.sec2!!))).copyOfRange(1, 33)
-            val conversationKey = nip44v2.getConversationKey(Hex.decode(v.sec1!!), pub2)
-            assertEquals(v.conversationKey, Hex.encode(conversationKey))
+            val conversationKey1 = nip44v2.getConversationKey(Hex.decode(v.sec1!!), pub2)
+            assertEquals(v.conversationKey, Hex.encode(conversationKey1))
 
             val ciphertext = nip44v2.encryptWithNonce(
                 v.plaintext!!,
-                conversationKey,
+                conversationKey1,
                 Hex.decode(v.nonce!!)
             ).encode()
 
             assertEquals(v.payload, ciphertext)
 
-            val decrypted = nip44v2.decrypt(v.payload!!, conversationKey)
-            assertEquals(v.plaintext, decrypted)
+            val pub1 = secp256k1.pubKeyCompress(secp256k1.pubkeyCreate(Hex.decode(v.sec1))).copyOfRange(1, 33)
+            val conversationKey2 = nip44v2.getConversationKey(Hex.decode(v.sec2), pub1)
+            assertEquals(v.conversationKey, Hex.encode(conversationKey2))
+
+            val decrypted2 = nip44v2.decrypt(v.payload!!, conversationKey2)
+            assertEquals(v.plaintext, decrypted2)
         }
     }
 
@@ -90,14 +94,14 @@ class NIP44v2Test {
     }
 
     @Test
-    fun invalidMessageLenghts() {
+    fun invalidMessageLengths() {
         val random = SecureRandom()
         for (v in vectors.v2?.invalid?.encryptMsgLengths!!) {
             val key = ByteArray(32)
             random.nextBytes(key)
             try {
                 nip44v2.encrypt("a".repeat(v), key)
-                fail("Should Throw for ${v}")
+                fail("Should Throw for $v")
             } catch (e: Exception) {
                 assertNotNull(e)
             }
