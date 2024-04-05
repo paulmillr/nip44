@@ -21,8 +21,8 @@ let package = Package(
             from: "0.12.2"
         ),
         .package(
-            url: "https://github.com/jedisct1/swift-sodium.git",
-            revision: "63240810df971557fe9badc557257bdfbfeb90a3"
+            url: "https://github.com/krzyzanowskim/CryptoSwift.git",
+            .upToNextMajor(from: "1.8.1")
         )
     ],
     targets: [
@@ -32,7 +32,7 @@ let package = Package(
             name: "NIP44",
             dependencies: [
                 .product(name: "secp256k1", package: "secp256k1.swift"),
-                .product(name: "Clibsodium", package: "swift-sodium")
+                "CryptoSwift"
             ]
         ),
         .testTarget(
