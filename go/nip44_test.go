@@ -94,29 +94,25 @@ func assertDecryptFail(t *testing.T, conversationKey string, plaintext string, c
 }
 
 func assertConversationKeyFail(t *testing.T, sk1 string, pub2 string, msg string) {
-	// TODO: Update GenerateConversationKey since secp256k1 does accept invalid or weak keys
-	t.Skip("secp256k1 keys are not validated yet during conversation key generation.")
 	var (
-		// sendPrivkey *secp256k1.PrivateKey
-		// recvPubkey  *secp256k1.PublicKey
-		decoded []byte
-		ok      bool
-		err     error
+		sk1Decoded  []byte
+		pub2Decoded []byte
+		ok          bool
+		err         error
 	)
-	decoded, err = hex.DecodeString(sk1)
+	sk1Decoded, err = hex.DecodeString(sk1)
 	if ok = assert.NoErrorf(t, err, "hex decode failed for sk1: %v", err); !ok {
 		return
 	}
-	// sendPrivkey = secp256k1.PrivKeyFromBytes(decoded)
-	decoded, err = hex.DecodeString("02" + pub2)
+	pub2Decoded, err = hex.DecodeString("02" + pub2)
 	if ok = assert.NoErrorf(t, err, "hex decode failed for pub2: %v", err); !ok {
 		return
 	}
-	_, err = secp256k1.ParsePubKey(decoded)
+	_, err = nip44.GenerateConversationKey(sk1Decoded, pub2Decoded)
 	assert.ErrorContains(t, err, msg)
 }
 
-func assertConversationKeyGeneration(t *testing.T, sendPrivkey *secp256k1.PrivateKey, recvPubkey *secp256k1.PublicKey, conversationKey string) bool {
+func assertConversationKeyGeneration(t *testing.T, sendPrivkey []byte, recvPubkey []byte, conversationKey string) bool {
 	var (
 		actualConversationKey   []byte
 		expectedConversationKey []byte
@@ -127,7 +123,10 @@ func assertConversationKeyGeneration(t *testing.T, sendPrivkey *secp256k1.Privat
 	if ok = assert.NoErrorf(t, err, "hex decode failed for conversation key: %v", err); !ok {
 		return false
 	}
-	actualConversationKey = nip44.GenerateConversationKey(sendPrivkey, recvPubkey)
+	actualConversationKey, err = nip44.GenerateConversationKey(sendPrivkey, recvPubkey)
+	if ok = assert.NoErrorf(t, err, "conversation key generation failed: %v", err); !ok {
+		return false
+	}
 	if ok = assert.Equalf(t, expectedConversationKey, actualConversationKey, "wrong conversation key"); !ok {
 		return false
 	}
@@ -136,41 +135,39 @@ func assertConversationKeyGeneration(t *testing.T, sendPrivkey *secp256k1.Privat
 
 func assertConversationKeyGenerationSec(t *testing.T, sk1 string, sk2 string, conversationKey string) bool {
 	var (
-		sendPrivkey *secp256k1.PrivateKey
-		recvPubkey  *secp256k1.PublicKey
+		sk1Decoded  []byte
+		pub2Decoded []byte
 		ok          bool
 		err         error
 	)
-	if decoded, err := hex.DecodeString(sk1); err == nil {
-		sendPrivkey = secp256k1.PrivKeyFromBytes(decoded)
-	}
+	sk1Decoded, err = hex.DecodeString(sk1)
 	if ok = assert.NoErrorf(t, err, "hex decode failed for sk1: %v", err); !ok {
 		return false
 	}
 	if decoded, err := hex.DecodeString(sk2); err == nil {
-		recvPubkey = secp256k1.PrivKeyFromBytes(decoded).PubKey()
+		pub2Decoded = secp256k1.PrivKeyFromBytes(decoded).PubKey().SerializeCompressed()
 	}
 	if ok = assert.NoErrorf(t, err, "hex decode failed for sk2: %v", err); !ok {
 		return false
 	}
-	return assertConversationKeyGeneration(t, sendPrivkey, recvPubkey, conversationKey)
+	return assertConversationKeyGeneration(t, sk1Decoded, pub2Decoded, conversationKey)
 }
 
 func assertConversationKeyGenerationPub(t *testing.T, sk1 string, pub2 string, conversationKey string) bool {
 	var (
-		sendPrivkey *secp256k1.PrivateKey
-		recvPubkey  *secp256k1.PublicKey
+		sk1Decoded  []byte
+		pub2Decoded []byte
 		ok          bool
 		err         error
 	)
-	if decoded, err := hex.DecodeString(sk1); err == nil {
-		sendPrivkey = secp256k1.PrivKeyFromBytes(decoded)
-	}
+	sk1Decoded, err = hex.DecodeString(sk1)
 	if ok = assert.NoErrorf(t, err, "hex decode failed for sk1: %v", err); !ok {
 		return false
 	}
 	if decoded, err := hex.DecodeString("02" + pub2); err == nil {
-		recvPubkey, err = secp256k1.ParsePubKey(decoded)
+		if recvPubkey, err := secp256k1.ParsePubKey(decoded); err == nil {
+			pub2Decoded = recvPubkey.SerializeCompressed()
+		}
 		if ok = assert.NoErrorf(t, err, "parse pubkey failed: %v", err); !ok {
 			return false
 		}
@@ -178,7 +175,7 @@ func assertConversationKeyGenerationPub(t *testing.T, sk1 string, pub2 string, c
 	if ok = assert.NoErrorf(t, err, "hex decode failed for pub2: %v", err); !ok {
 		return false
 	}
-	return assertConversationKeyGeneration(t, sendPrivkey, recvPubkey, conversationKey)
+	return assertConversationKeyGeneration(t, sk1Decoded, pub2Decoded, conversationKey)
 }
 
 func assertMessageKeyGeneration(t *testing.T, conversationKey string, salt string, chachaKey string, chachaSalt string, hmacKey string) bool {
@@ -431,7 +428,7 @@ func TestConversationKeyFail001(t *testing.T) {
 	assertConversationKeyFail(t,
 		"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-		"x coordinate 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef is not on the secp256k1 curve",
+		"invalid private key: x coordinate ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff is not on the secp256k1 curve",
 	)
 }
 
@@ -440,7 +437,7 @@ func TestConversationKeyFail002(t *testing.T) {
 	assertConversationKeyFail(t,
 		"0000000000000000000000000000000000000000000000000000000000000000",
 		"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-		"x coordinate 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef is not on the secp256k1 curve",
+		"invalid private key: x coordinate 0000000000000000000000000000000000000000000000000000000000000000 is not on the secp256k1 curve",
 	)
 }
 
@@ -449,7 +446,7 @@ func TestConversationKeyFail003(t *testing.T) {
 	assertConversationKeyFail(t,
 		"fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364139",
 		"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-		"x >= field prime",
+		"invalid public key: x >= field prime",
 	)
 }
 
@@ -458,7 +455,7 @@ func TestConversationKeyFail004(t *testing.T) {
 	assertConversationKeyFail(t,
 		"fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
 		"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-		"x coordinate 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef is not on the secp256k1 curve",
+		"invalid private key: x coordinate fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141 is not on the secp256k1 curve",
 	)
 }
 
@@ -467,7 +464,7 @@ func TestConversationKeyFail005(t *testing.T) {
 	assertConversationKeyFail(t,
 		"0000000000000000000000000000000000000000000000000000000000000002",
 		"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-		"x coordinate 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef is not on the secp256k1 curve",
+		"invalid public key: x coordinate 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef is not on the secp256k1 curve",
 	)
 }
 
@@ -476,7 +473,7 @@ func TestConversationKeyFail006(t *testing.T) {
 	assertConversationKeyFail(t,
 		"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
 		"0000000000000000000000000000000000000000000000000000000000000000",
-		"x coordinate 0000000000000000000000000000000000000000000000000000000000000000 is not on the secp256k1 curve",
+		"invalid public key: x coordinate 0000000000000000000000000000000000000000000000000000000000000000 is not on the secp256k1 curve",
 	)
 }
 
@@ -485,7 +482,7 @@ func TestConversationKeyFail007(t *testing.T) {
 	assertConversationKeyFail(t,
 		"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
 		"eb1f7200aecaa86682376fb1c13cd12b732221e774f553b0a0857f88fa20f86d",
-		"x coordinate eb1f7200aecaa86682376fb1c13cd12b732221e774f553b0a0857f88fa20f86d is not on the secp256k1 curve",
+		"invalid public key: x coordinate eb1f7200aecaa86682376fb1c13cd12b732221e774f553b0a0857f88fa20f86d is not on the secp256k1 curve",
 	)
 }
 
@@ -494,7 +491,7 @@ func TestConversationKeyFail008(t *testing.T) {
 	assertConversationKeyFail(t,
 		"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
 		"709858a4c121e4a84eb59c0ded0261093c71e8ca29efeef21a6161c447bcaf9f",
-		"x coordinate 709858a4c121e4a84eb59c0ded0261093c71e8ca29efeef21a6161c447bcaf9f is not on the secp256k1 curve",
+		"invalid public key: x coordinate 709858a4c121e4a84eb59c0ded0261093c71e8ca29efeef21a6161c447bcaf9f is not on the secp256k1 curve",
 	)
 }
 
