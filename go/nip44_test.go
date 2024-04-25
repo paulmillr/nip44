@@ -6,8 +6,8 @@ import (
 	"hash"
 	"testing"
 
-	"git.ekzyis.com/ekzyis/nip44"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/ekzyis/nip44"
 	"github.com/stretchr/testify/assert"
 )
 
