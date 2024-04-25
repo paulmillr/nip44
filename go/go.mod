@@ -1,4 +1,4 @@
-module git.ekzyis.com/ekzyis/nip44
+module github.com/ekzyis/nip44
 
 go 1.21.0
 
