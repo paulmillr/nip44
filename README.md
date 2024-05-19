@@ -12,6 +12,7 @@ Audited on [2023.12](./audit-2023.12.pdf) by Cure53, Dr M. Heiderich, Dr. Mazahe
 | Rust            | MIT           | https://github.com/mikedilger/nip44        |
 | Swift           | MIT           | https://github.com/nostr-sdk/nostr-sdk-ios |
 | TypeScript / JS | Public domain | https://github.com/nostr-protocol/nips     |
+| C               | LGPL 2.1+     | https://github.com/vnuge/noscrypt          |
 
 ---
 NIP-44
