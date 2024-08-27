@@ -15,7 +15,7 @@
             "type": "equals",
             "lhs": "${hostSystemName}",
             "rhs": "Windows"
-          }
+          },
         },
         {
             "name": "x64-debug",
@@ -27,37 +27,36 @@
             },
             "cacheVariables": {
               "CMAKE_BUILD_TYPE": "Debug",
-              "NC_BUILD_TESTS": true
+              "NC_BUILD_TESTS": true,
+              "NC_ENABLE_UTILS": true
             }
         },
-        {
-            "name": "x64-release",
-            "displayName": "x64 Release",
+         {
+            "name": "x64-debug-openssl",
+            "displayName": "x64 Debug Openssl",
             "inherits": "x64-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        },
-        {
-            "name": "x86-debug",
-            "displayName": "x86 Debug",
-            "inherits": "windows-base",
             "architecture": {
-                "value": "x86",
+                "value": "x64",
                 "strategy": "external"
             },
             "cacheVariables": {
               "CMAKE_BUILD_TYPE": "Debug",
-              "NC_BUILD_TESTS": true
+              "NC_BUILD_TESTS": true,
+              "CRYPTO_LIB": "openssl"
             }
         },
-        {
-            "name": "x86-release",
-            "displayName": "x86 Release",
-            "inherits": "x86-debug",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
+      {
+        "name": "x64-release",
+        "displayName": "x64 Release",
+        "inherits": "windows-base",
+        "architecture": {
+          "value": "x64",
+          "strategy": "external"
+        },
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "NC_ENABLE_UTILS": true
         }
+      }
     ]
 }

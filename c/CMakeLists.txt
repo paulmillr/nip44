@@ -17,11 +17,12 @@ project(
 set(_NC_PROJ_NAME "noscrypt")
 
 option(NC_BUILD_TESTS "Build tests" OFF)
+option(NC_ENABLE_UTILS "Enables the sidecar utility library" OFF)
 option(NC_DISABLE_INPUT_VALIDATION "Disables public function input validation" OFF)
 option(NC_FETCH_MBEDTLS "Fetch Mbed-TLS from it's source repository locally" OFF)
 option(NC_FETCH_SECP256K1 "Fetch and locally build secp256k1 source code" ON)
 option(NC_INCLUDE_MONOCYPHER "Statically link to vendored monocypher library" ON)
-set(CRYPTO_LIB "" CACHE STRING "The crypto library to link to (mbedtls, openssl)")
+set(CRYPTO_LIB "" CACHE STRING "The crypto library to link to (mbedtls, openssl, bcrypt)")
 set(CRYPTO_LIB_DIR "" CACHE STRING "The path to the crypto library if it's not globally available")
 set(SECP256K1_LIB_DIR "" CACHE STRING "An optional path to search for the secp256k1 library if not globally installed")
 
@@ -40,7 +41,7 @@ if(NC_FETCH_SECP256K1)
 	set(SECP256K1_BUILD_EXAMPLES OFF)
 	set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
 	set(SECP256K1_ENABLE_MODULE_ECDH ON)
-	set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
+	set(SECP256K1_ENABLE_MODULE_RECOVERY OFF)
 	set(SECP256K1_ENABLE_MODULE_SCHNORRSIG ON)
 	set(SECP256K1_ENABLE_MODULE_EXTRAKEYS ON)
 	set(SECP256K1_ENABLE_MODULE_ELLSWIFT OFF)
@@ -50,12 +51,21 @@ if(NC_FETCH_SECP256K1)
 	FetchContent_Declare(
 	  libsecp256k1
 	  GIT_REPOSITORY		https://github.com/bitcoin-core/secp256k1
-	  GIT_TAG				1ad5185cd42c0636104129fcc9f6a4bf9c67cc40 # release-0.4.1
+	  GIT_TAG				642c885b6102725e25623738529895a95addc4f4 # release-0.5.1
 	  GIT_PROGRESS			TRUE
 	)
 
 	FetchContent_MakeAvailable(libsecp256k1)
-
+	
+	#Must force FPIC when using secp256k1, ld linker complains otherwise
+	set_target_properties(
+		secp256k1 
+		secp256k1_precomputed 
+		
+		PROPERTIES 
+		POSITION_INDEPENDENT_CODE  ON
+	)
+	
 else()	
 
 	#search for an existing library, it's a required dependency
@@ -71,39 +81,57 @@ endif()
 #		MAIN PROJECT
 #-----------------------------
 
-include_directories(include)				#include the 'include' directory for the project
-set(CMAKE_C_STANDARD 90)					#Setup the compiler options for c90 shared library
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_C_EXTENSIONS OFF)
-
 set(NOSCRYPT_SRCS 
 	"src/noscrypt.c"	
-	"src/crypto/hkdf.c"
-	"src/crypto/nc-crypto.c"				#pulls in c impl files as needed
+	"src/hkdf.c"
+	"src/nc-crypto.c"				#pulls in c impl files as needed
 )
 
 set(NOSCRYPT_HEADERS
 	"include/noscrypt.h"
 	"include/platform.h"
-	"include/nc-util.h"
-	"include/hkdf.h"
-	"include/nc-crypto.h"
+	"src/nc-util.h"
+	"src/hkdf.h"
+	"src/nc-crypto.h"
 )
+
+#if utils are enabled, add the source files
+if(NC_ENABLE_UTILS)
+	list(APPEND NOSCRYPT_SRCS "src/noscryptutil.c")
+	list(APPEND NOSCRYPT_HEADERS "include/noscryptutil.h")
+
+	#notify the project that utils are enabled
+	list(APPEND NC_PROJ_DEFINTIONS NC_ENABLE_UTILS)
+
+	message(STATUS "Utilities libraries are enabled")
+endif()
 
 #static/shared library
 add_library(${_NC_PROJ_NAME} SHARED ${NOSCRYPT_SRCS} ${NOSCRYPT_HEADERS})
 add_library(${_NC_PROJ_NAME}_static STATIC ${NOSCRYPT_SRCS} ${NOSCRYPT_HEADERS})
-target_compile_features(${_NC_PROJ_NAME} PUBLIC c_std_90)	#force compiler to use c90 standard for library
+set_target_properties(${_NC_PROJ_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)		#fPIC for shared library
+
+#set specific cmake commands to target our projects only
+set_target_properties(
+	${_NC_PROJ_NAME} 
+	${_NC_PROJ_NAME}_static 
+	
+	#Setup the compiler options for c90 standard
+	PROPERTIES 
+	C_STANDARD 90
+	C_STANDARD_REQUIRED ON
+	C_EXTENSIONS ON			#enables c++ style comments (only required for mbedtls stuff)
+)
+
+target_compile_features(${_NC_PROJ_NAME} PRIVATE c_std_90)	#force compiler to use c90 standard for library
+target_compile_features(${_NC_PROJ_NAME}_static PRIVATE c_std_90)	#force compiler to use c90 standard for library
+
+target_include_directories(${_NC_PROJ_NAME} PRIVATE include)
+target_include_directories(${_NC_PROJ_NAME}_static PRIVATE include)
 
 #link libsecp256k1
-if(MSVC)
-	target_link_libraries(${_NC_PROJ_NAME} PRIVATE secp256k1)
-	target_link_libraries(${_NC_PROJ_NAME}_static PRIVATE secp256k1)
-else()
-	target_link_libraries(${_NC_PROJ_NAME} INTERFACE secp256k1)
-	target_link_libraries(${_NC_PROJ_NAME}_static INTERFACE secp256k1)
-endif()
+target_link_libraries(${_NC_PROJ_NAME} PRIVATE secp256k1)
+target_link_libraries(${_NC_PROJ_NAME}_static PRIVATE secp256k1)
 
 #include secp256k1 headers
 target_include_directories(${_NC_PROJ_NAME} SYSTEM PUBLIC vendor/secp256k1/include)
@@ -115,21 +143,13 @@ target_include_directories(${_NC_PROJ_NAME}_static SYSTEM PUBLIC vendor/secp256k
 #
 #############################################
 
-#try to load openssl quietly in order to check for its availability
-find_package(OpenSSL QUIET)
-
-#setup default linking to crypto libraries for certain plaftorms. 
-#Windows defaults to bcrypt, openssl otherwise if installed
-if(CRYPTO_LIB STREQUAL "")	
-  if(MSVC)
-	set(CRYPTO_LIB "bcrypt")
-  elseif(OPENSSL_FOUND)
-	set(CRYPTO_LIB "openssl")
-  endif()
-endif()
-
 #Include mbedtls if enabled
 if(NC_FETCH_MBEDTLS)
+
+	###############
+	# NOTE: Must disable shared libraries to avoid linking errors when using mbedtls
+	###############
+	set(BUILD_SHARED_LIBS OFF)
 
 	set(ENABLE_PROGRAMS OFF)
 	set(ENABLE_TESTING OFF)
@@ -150,6 +170,22 @@ if(NC_FETCH_MBEDTLS)
 	set(CRYPTO_LIB "mbedtls")		#enable linking to mbedtls
 
 endif()
+
+#try to load openssl quietly in order to check for its availability
+find_package(OpenSSL QUIET)
+
+#setup default linking to crypto libraries for certain plaftorms. 
+#Windows defaults to bcrypt, openssl otherwise if installed
+if(CRYPTO_LIB STREQUAL "")	
+  if(MSVC)
+	set(CRYPTO_LIB "bcrypt")
+  elseif(OPENSSL_FOUND)
+	set(CRYPTO_LIB "openssl")
+  endif()
+
+  message(STATUS "No crypto library was specified, defaulting to ${CRYPTO_LIB}")
+endif()
+
 
 #if mbedtls linking is enabled target the library
 if(CRYPTO_LIB STREQUAL "mbedtls")
@@ -333,16 +369,32 @@ endif()
 target_compile_definitions(${_NC_PROJ_NAME} PRIVATE ${NC_PROJ_DEFINTIONS})
 target_compile_definitions(${_NC_PROJ_NAME}_static PRIVATE ${NC_PROJ_DEFINTIONS})
 
-#TESTS
+############################
+#
+#		TESTS
+#
+###########################
 if(NC_BUILD_TESTS)
 
-	#add test executable and link to library
+	#add test executable and link to shared library for more realistic usage
 	add_executable(nctest tests/test.c)
-	target_link_libraries(nctest ${_NC_PROJ_NAME}_static)
+	target_link_libraries(nctest ${_NC_PROJ_NAME})
+
 	target_include_directories(nctest PRIVATE include)
+	target_include_directories(nctest PRIVATE src)	#allow access to internal headers
 
 	#enable c11 for testing
 	target_compile_features(nctest PRIVATE c_std_11)
+	target_compile_definitions(nctest PRIVATE ${NC_PROJ_DEFINTIONS})
+
+	enable_testing()
+
+	add_test(
+		NAME nctest 
+		COMMAND nctest
+		CONFIGURATIONS ${CMAKE_BUILD_TYPE}
+	)
+
 endif()
 
 ###########################
@@ -369,9 +421,20 @@ install(TARGETS ${_NC_PROJ_NAME}_static
     INCLUDES DESTINATION include
 )
 
-install(FILES 
-	include/noscrypt.h
+SET(NC_INSTALL_HEADERS 
+	include/noscrypt.h	#static install headers
 	include/platform.h
+)
+
+if(NC_ENABLE_UTILS)
+	LIST(APPEND 
+		NC_INSTALL_HEADERS
+		include/noscryptutil.h
+	)
+endif()
+
+install(FILES 
+	${NC_INSTALL_HEADERS}
 	DESTINATION noscrypt
 )
 
