@@ -28,18 +28,12 @@
 
 #include <nc-util.h>
 
-typedef struct hexBytes
-{
-	uint8_t* data;
-	size_t length;
-} HexBytes;
-
-/* Deferred list of HexBytes to be freed on exit */
-static HexBytes* _hdeferList[10];
+/* Deferred list of span_t to be freed on exit */
+static span_t _hdeferList[20];
 static size_t _hdeferListIndex = 0;
 
 /* 
-	Allocates a HexBytes and decodes the hexadecimal string into it's binary
+	Allocates a span_t and decodes the hexadecimal string into it's binary
 	representation. The string must be a valid hexadecimal string and the length
 	and may not be NULL. The length may be known at compile time and can be used
     to assert the length of the string literal.
@@ -48,34 +42,34 @@ static size_t _hdeferListIndex = 0;
 */
 #define FromHexString(str, len) _fromHexString(str, sizeof(str) - 1); STATIC_ASSERT(sizeof(str)/2 == len && len > 0, "Invalid length hex string literal");
 
-static HexBytes* __allocHexBytes(size_t length)
+static span_t __allocHexBytes(size_t length)
 {
-	HexBytes* hexBytes;
+	span_t hexBytes;
 
 	length /= 2;
 
-	hexBytes = (HexBytes*)malloc(length + sizeof(HexBytes));
-	if(!hexBytes)
+	hexBytes.data = malloc(length);
+
+	if(!hexBytes.data)
 	{
-		return NULL;
+		return hexBytes;
 	}
 
-	hexBytes->length = length;
-	/* data starts after the structure size */
-	hexBytes-> data = ((uint8_t*)hexBytes) + sizeof(HexBytes);
+	hexBytes.size = length;
 	/* add new value to deferred cleanup list */
 	_hdeferList[_hdeferListIndex++] = hexBytes;
 	return hexBytes;
 }
 
-static HexBytes* _fromHexString(const char* hexLiteral, size_t strLen)
+static span_t _fromHexString(const char* hexLiteral, uint32_t strLen)
 {
-	HexBytes* hexBytes;
+	span_t hexBytes;
 	size_t i;
 
 	if(!hexLiteral)
 	{
-		return NULL;
+		ncSpanInit(&hexBytes, NULL, 0);
+		return hexBytes;
 	}
 
 	/* alloc the raw bytes */
@@ -90,14 +84,14 @@ static HexBytes* _fromHexString(const char* hexLiteral, size_t strLen)
 		byteString[0] = hexLiteral[i];
 		byteString[1] = hexLiteral[i + 1];
 
-		hexBytes->data[i / 2] = (uint8_t)strtol(byteString, NULL, 16);
+		hexBytes.data[i / 2] = (uint8_t)strtol(byteString, NULL, 16);
 	}
 	
 	return hexBytes;
 }
 
 /*
-	Frees all the HexBytes that were allocated by the 
+	Frees all the span_t that were allocated by the 
 	FromHexString function. To be called at the end of 
 	the program.
 */
@@ -105,8 +99,8 @@ static void FreeHexBytes(void)
 {
 	while(_hdeferListIndex > 0)
 	{
-		free(_hdeferList[--_hdeferListIndex]);
-		_hdeferList[_hdeferListIndex] = NULL;
+		free(_hdeferList[--_hdeferListIndex].data);
+		memset(&_hdeferList[_hdeferListIndex], 0, sizeof(span_t));
 	}
 }
 
@@ -127,18 +121,18 @@ static void PrintHexRaw(void* bytes, size_t len)
 }
 
 /*
-* Prints the value of the HexBytes as a hexadecimal string
-* @param hexBytes A pointer to the HexBytes structure to print the value of
+* Prints the value of the span_t as a hexadecimal string
+* @param hexBytes A pointer to the span_t structure to print the value of
 */
-static void PrintHexBytes(HexBytes* hexBytes)
+static void PrintHexBytes(span_t hexBytes)
 {
-	if (!hexBytes)
+	if (ncSpanIsValid(hexBytes))
 	{
-		puts("NULL");
+		PrintHexRaw(hexBytes.data, hexBytes.size);
 	}
 	else
 	{
-		PrintHexRaw(hexBytes->data, hexBytes->length);
+		puts("NULL");		
 	}
 }
 
