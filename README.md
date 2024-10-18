@@ -4,7 +4,7 @@ NIP44 encrypted messages for [nostr](https://nostr.com).
 Spec copied from [github.com/nostr-protocol/nips](https://github.com/nostr-protocol/nips/blob/master/44.md).
 Audited on [2023.12](./audit-2023.12.pdf) by Cure53, Dr M. Heiderich, Dr. Mazaheri, Dr. Bleichenbacher.
 
-The implementations besides JS have not been audited: use at your own risk.
+Not all implementations have been audited. Only the TS/JS, Go, & Rust repos were included in the 2023.12 audit. Be sure to check the commits in scope of the audit & use at your own risk.
 
 | Language        | License       | Copied from                                |
 |-----------------|---------------|--------------------------------------------|
