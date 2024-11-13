@@ -15,6 +15,7 @@ Not all implementations have been audited. Only the TS/JS, Go, & Rust repos were
 | Swift           | MIT           | https://github.com/nostr-sdk/nostr-sdk-ios |
 | TypeScript / JS | Public domain | https://github.com/nostr-protocol/nips     |
 | C               | LGPL 2.1+     | https://github.com/vnuge/noscrypt          |
+| Dart            | MIT           | https://github.com/chebizarro/dart-nip44   |
 
 ---
 NIP-44
