@@ -8,14 +8,15 @@ Not all implementations have been audited. Only the TS/JS, Go, & Rust repos were
 
 | Language        | License       | Copied from                                |
 |-----------------|---------------|--------------------------------------------|
-| F#              | GPL 2         | https://github.com/lontivero/Nostra        |
-| Go              | MIT           | https://github.com/ekzyis/nip44            |
-| Kotlin          | MIT           | https://github.com/vitorpamplona/amethyst  |
-| Rust            | MIT           | https://github.com/mikedilger/nip44        |
-| Swift           | MIT           | https://github.com/nostr-sdk/nostr-sdk-ios |
 | TypeScript / JS | Public domain | https://github.com/nostr-protocol/nips     |
 | C               | LGPL 2.1+     | https://github.com/vnuge/noscrypt          |
 | Dart            | MIT           | https://github.com/chebizarro/dart-nip44   |
+| F#              | GPL 2         | https://github.com/lontivero/Nostra        |
+| Go              | MIT           | https://github.com/ekzyis/nip44            |
+| Haskell         | GPL 3         | https://github.com/futrnostr/futr          |
+| Kotlin          | MIT           | https://github.com/vitorpamplona/amethyst  |
+| Rust            | MIT           | https://github.com/mikedilger/nip44        |
+| Swift           | MIT           | https://github.com/nostr-sdk/nostr-sdk-ios |
 
 ---
 NIP-44
