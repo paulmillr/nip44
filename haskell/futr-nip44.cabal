@@ -1,0 +1,58 @@
+cabal-version:      2.4
+name:               futr-nip44
+version:            0.1.0.0
+license:            GPL-3.0-only
+license-file:       LICENSE
+copyright:          2024 Sascha-Oliver Prolic
+maintainer:         saschaprolic@googlemail.com
+author:             Sascha-Oliver Prolic
+tested-with:        ghc == 9.6.6
+homepage:           https://github.com/futrnostr/futr#readme
+synopsis:           nostr client application
+description:        A nostr client application written in Haskell and Qt5.
+category:           application
+build-type:         Simple
+extra-source-files: README.md build.touch
+
+test-suite futr-nip-44-tests
+    type:                 exitcode-stdio-1.0
+    hs-source-dirs:       test, src
+    main-is:              TestMain.hs
+
+    other-modules:
+        Nostr.Encryption
+        Nostr.Encryption.Internal
+        Nostr.EncryptionTest
+        Nostr.Keys
+
+    ghc-options:
+        -threaded -Wall -Wcompat -Wincomplete-uni-patterns
+        -Wincomplete-record-updates
+
+    build-depends:
+        aeson >=2.2.3.0 && <2.3,
+        base >=4.18.2.1 && <4.19,
+        base16-bytestring >=1.0.2.0 && <1.1,
+        base64-bytestring,
+        bech32 >=1.1.7 && <1.2,
+        binary >=0.8.9.1 && <0.9,
+        bytestring >=0.11.5.3 && <0.12,
+        crypton >=1.0 && <1.1,
+        directory >=1.3.7.1 && <1.4,
+        entropy >=0.4.1.10 && <0.5,
+        haskoin-core,
+        libsecp256k1 >=0.3.0 && <0.4,
+        memory >=0.18 && <0.19,
+        tasty >=1.4.3 && <1.5,
+        tasty-hunit >=0.10.2 && <0.11,
+        text >=2.0.2 && <2.1,
+        random >=1.2.1.2 && <1.3
+
+    extra-libraries:  secp256k1
+    extra-lib-dirs:   /usr/local/lib
+    default-language:     Haskell2010
+
+source-repository head
+  type: git
+  location: https://github.com/futrnostr/futr/
+  branch: master
