@@ -16,6 +16,7 @@ Not all implementations have been audited. Only the TS/JS, Go, & Rust repos were
 | TypeScript / JS | Public domain | https://github.com/nostr-protocol/nips     |
 | C               | LGPL 2.1+     | https://github.com/vnuge/noscrypt          |
 | Dart            | MIT           | https://github.com/chebizarro/dart-nip44   |
+| Haskell         | GPL 3         | https://github.com/futrnostr/futr          |
 
 ---
 NIP-44
